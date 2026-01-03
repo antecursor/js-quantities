@@ -1259,6 +1259,39 @@ describe("js-quantities", function() {
     });
   });
 
+  describe("registerUnits", function() {
+    it("should register custom units and allow conversions", function() {
+      Qty.registerUnits({
+        name: "<furlong-test>",
+        aliases: ["fl-test"],
+        scalar: 201.168,
+        kind: "length",
+        num: ["<meter>"],
+        den: []
+      });
+
+      var qty = Qty("2 fl-test");
+
+      expect(qty.kind()).toBe("length");
+      expect(qty.isCompatible(Qty("1 m"))).toBe(true);
+      expect(qty.to("m").scalar).toBeCloseTo(402.336, 3);
+      expect(Qty.getAliases("fl-test")).toContain("fl-test");
+    });
+
+    it("should reject conflicting aliases", function() {
+      expect(function() {
+        Qty.registerUnits({
+          name: "<duplicate-meter>",
+          aliases: ["m"],
+          scalar: 1,
+          kind: "length",
+          num: ["<meter>"],
+          den: []
+        });
+      }).toThrow();
+    });
+  });
+
   describe("information", function() {
     describe("bits and bytes", function() {
       it("should have 'information' as kind", function() {

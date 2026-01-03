@@ -538,6 +538,153 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   };
 
   /**
+   * Registers additional unit definitions at runtime.
+   *
+   * @param {(Object|Object[])} unitDefs - unit definition(s)
+   *   {name:"<furlong>", aliases:["fl"], scalar:201.2, kind:"length", num:["<meter>"], den:[]}
+   * @throws {QtyError} on invalid or conflicting definitions
+   */
+  Qty.registerUnits = function(unitDefs) {
+    if(!unitDefs) {
+      return;
+    }
+
+    if(!Array.isArray(unitDefs)) {
+      unitDefs = [unitDefs];
+    }
+
+    var normalizedDefs = [];
+    var pendingAliases = {};
+
+    function normalizeUnitName(name) {
+      if(!isString(name)) {
+        throw new QtyError("Unit name must be a string");
+      }
+      name = name.trim();
+      if(name.length === 0) {
+        throw new QtyError("Unit name is required");
+      }
+      if(name.charAt(0) !== "<") {
+        name = "<" + name;
+      }
+      if(name.charAt(name.length - 1) !== ">") {
+        name = name + ">";
+      }
+      if(!/^<[^>]+>$/.test(name)) {
+        throw new QtyError("Invalid unit name " + name);
+      }
+      return name;
+    }
+
+    function normalizeAliases(aliases) {
+      if(!aliases || !Array.isArray(aliases) || aliases.length === 0) {
+        throw new QtyError("At least one alias is required");
+      }
+      return aliases.map(function(alias) {
+        if(!isString(alias)) {
+          throw new QtyError("Aliases must be strings");
+        }
+        alias = alias.trim();
+        if(alias.length === 0) {
+          throw new QtyError("Alias cannot be blank");
+        }
+        if(alias.indexOf("<") >= 0 || alias.indexOf(">") >= 0) {
+          throw new QtyError("Alias must not include angle brackets: " + alias);
+        }
+        if(UNIT_MAP[alias] || PREFIX_MAP[alias] || pendingAliases[alias]) {
+          throw new QtyError("Alias already defined: " + alias);
+        }
+        pendingAliases[alias] = true;
+        return alias;
+      });
+    }
+
+    function normalizeUnitToken(token, label) {
+      if(!isString(token)) {
+        throw new QtyError(label + " units must be strings");
+      }
+      token = token.trim();
+      if(token.length === 0) {
+        throw new QtyError(label + " units must be non-empty");
+      }
+      if(UNITS[token]) {
+        return token;
+      }
+      if(UNIT_MAP[token]) {
+        return UNIT_MAP[token];
+      }
+      if(token.charAt(0) === "<" && token.charAt(token.length - 1) === ">") {
+        throw new QtyError("Unknown unit " + token + " in " + label);
+      }
+      throw new QtyError("Unknown unit " + token + " in " + label);
+    }
+
+    function normalizeUnitArray(units, label) {
+      if(!units) {
+        return [];
+      }
+      if(!Array.isArray(units)) {
+        throw new QtyError(label + " must be an array of units");
+      }
+      return units.map(function(unitToken) {
+        return normalizeUnitToken(unitToken, label);
+      });
+    }
+
+    for(var i = 0; i < unitDefs.length; i++) {
+      var def = unitDefs[i];
+      if(!def || typeof def !== "object") {
+        throw new QtyError("Unit definition must be an object");
+      }
+
+      var name = normalizeUnitName(def.name);
+      if(UNITS[name]) {
+        throw new QtyError("Unit already defined: " + name);
+      }
+
+      var aliases = normalizeAliases(def.aliases || def.symbols || []);
+
+      if(!isNumber(def.scalar) || def.scalar <= 0) {
+        throw new QtyError("Scalar must be a positive number");
+      }
+
+      var numerator = normalizeUnitArray(def.num || def.numerator, "Numerator");
+      var denominator = normalizeUnitArray(def.den || def.denominator, "Denominator");
+
+      var computedKind = Qty({"scalar": 1, "numerator": numerator, "denominator": denominator}).kind();
+      if(!computedKind) {
+        throw new QtyError("Unknown unit signature for " + name);
+      }
+      var kind = def.kind || computedKind;
+      if(def.kind && def.kind !== computedKind) {
+        throw new QtyError("Declared kind '" + def.kind + "' does not match '" + computedKind + "'");
+      }
+
+      normalizedDefs.push({
+        name: name,
+        aliases: aliases,
+        scalar: def.scalar,
+        kind: kind,
+        numerator: numerator,
+        denominator: denominator
+      });
+    }
+
+    for(var j = 0; j < normalizedDefs.length; j++) {
+      var normalized = normalizedDefs[j];
+      UNITS[normalized.name] = [
+        normalized.aliases,
+        normalized.scalar,
+        normalized.kind,
+        normalized.numerator,
+        normalized.denominator
+      ];
+    }
+
+    rebuildUnitSystems();
+  };
+
+  /**
    * Default formatter
    *
    * @param {number} scalar
@@ -1271,7 +1418,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     return Qty({"scalar": q, "numerator": num, "denominator": den});
   }
 
-  var parsedUnitsCache = {};
   /**
    * Parses and converts units string to normalized unit array.
    * Result is cached to speed up next calls.
@@ -1813,49 +1959,71 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   }
 
   // Setup
-  var PREFIX_VALUES = {};
-  var PREFIX_MAP = {};
-  var UNIT_VALUES = {};
-  var UNIT_MAP = {};
-  var OUTPUT_MAP = {};
-  for(var unitDef in UNITS) {
-    if(UNITS.hasOwnProperty(unitDef)) {
-      var definition = UNITS[unitDef];
-      if(definition[2] === "prefix") {
-        PREFIX_VALUES[unitDef] = definition[1];
-        for(var i = 0; i < definition[0].length; i++) {
-          PREFIX_MAP[definition[0][i]] = unitDef;
-        }
-      }
-      else {
-        UNIT_VALUES[unitDef] = {
-          scalar: definition[1],
-          numerator: definition[3],
-          denominator: definition[4]
-        };
-        for(var j = 0; j < definition[0].length; j++) {
-          UNIT_MAP[definition[0][j]] = unitDef;
-        }
-      }
-      OUTPUT_MAP[unitDef] = definition[0][0];
-    }
-  }
-  var PREFIX_REGEX = Object.keys(PREFIX_MAP).sort(function(a, b) {
-    return b.length - a.length;
-  }).join("|");
-  var UNIT_REGEX = Object.keys(UNIT_MAP).sort(function(a, b) {
-    return b.length - a.length;
-  }).join("|");
+  var PREFIX_VALUES;
+  var PREFIX_MAP;
+  var UNIT_VALUES;
+  var UNIT_MAP;
+  var OUTPUT_MAP;
+  var PREFIX_REGEX;
+  var UNIT_REGEX;
+  var UNIT_MATCH;
+  var UNIT_MATCH_REGEX;
+  var UNIT_TEST_REGEX;
   /*
    * Minimal boundary regex to support units with Unicode characters
    * \b only works for ASCII
    */
   var BOUNDARY_REGEX = "\\b|$";
-  var UNIT_MATCH = "(" + PREFIX_REGEX + ")??(" +
-                   UNIT_REGEX +
-                   ")(?:" + BOUNDARY_REGEX + ")";
-  var UNIT_MATCH_REGEX = new RegExp(UNIT_MATCH, "g"); // g flag for multiple occurences
-  var UNIT_TEST_REGEX = new RegExp("^\\s*(" + UNIT_MATCH + "\\s*\\*?\\s*)+$");
+  var parsedUnitsCache = {};
+
+  function rebuildUnitSystems() {
+    PREFIX_VALUES = {};
+    PREFIX_MAP = {};
+    UNIT_VALUES = {};
+    UNIT_MAP = {};
+    OUTPUT_MAP = {};
+
+    for(var unitDef in UNITS) {
+      if(UNITS.hasOwnProperty(unitDef)) {
+        var definition = UNITS[unitDef];
+        if(definition[2] === "prefix") {
+          PREFIX_VALUES[unitDef] = definition[1];
+          for(var i = 0; i < definition[0].length; i++) {
+            PREFIX_MAP[definition[0][i]] = unitDef;
+          }
+        }
+        else {
+          UNIT_VALUES[unitDef] = {
+            scalar: definition[1],
+            numerator: definition[3],
+            denominator: definition[4]
+          };
+          for(var j = 0; j < definition[0].length; j++) {
+            UNIT_MAP[definition[0][j]] = unitDef;
+          }
+        }
+        OUTPUT_MAP[unitDef] = definition[0][0];
+      }
+    }
+
+    PREFIX_REGEX = Object.keys(PREFIX_MAP).sort(function(a, b) {
+      return b.length - a.length;
+    }).join("|");
+    UNIT_REGEX = Object.keys(UNIT_MAP).sort(function(a, b) {
+      return b.length - a.length;
+    }).join("|");
+
+    UNIT_MATCH = "(" + PREFIX_REGEX + ")??(" +
+                 UNIT_REGEX +
+                 ")(?:" + BOUNDARY_REGEX + ")";
+    UNIT_MATCH_REGEX = new RegExp(UNIT_MATCH, "g"); // g flag for multiple occurences
+    UNIT_TEST_REGEX = new RegExp("^\\s*(" + UNIT_MATCH + "\\s*\\*?\\s*)+$");
+
+    parsedUnitsCache = {};
+    baseUnitCache = {};
+  }
+
+  rebuildUnitSystems();
 
   /**
    * Custom error type definition

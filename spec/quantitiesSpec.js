@@ -1241,10 +1241,21 @@ describe("js-quantities", function() {
 
   describe("Qty.getUnits", function() {
     it("should return an array of units of kind", function() {
-      expect(Qty.getUnits("currency")).toContain("dollar");
+      var units = Qty.getUnits("currency");
+      var dollar = units.filter(function(unit) { return unit.name === "dollar"; })[0];
+      expect(dollar).toBeDefined();
+      expect(dollar.aliases).toContain("USD");
+      expect(dollar.scalar).toEqual(1);
+      expect(dollar.numeratorUnits).toEqual(["dollar"]);
+      expect(dollar.denominatorUnits).toEqual([]);
+      expect(dollar.kind).toEqual("currency");
     });
     it("should return an array of all units without arg", function () {
-      expect(Qty.getUnits()).toContain("sievert");
+      var units = Qty.getUnits();
+      var sievert = units.filter(function(unit) { return unit.name === "sievert"; })[0];
+      expect(sievert).toBeDefined();
+      expect(sievert.numeratorUnits).toEqual(["meter", "meter"]);
+      expect(sievert.denominatorUnits).toEqual(["second", "second"]);
     });
     it("should throw unknown kind", function () {
       expect(function () {Qty.getUnits('bogusKind')}).toThrow("Kind not recognized");

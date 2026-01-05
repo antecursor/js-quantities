@@ -492,33 +492,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
    * Returns a list of available units of kind
    *
    * @param {string} [kind]
-   * @returns {array} names of units
+   * @returns {Object[]} unit definitions with name, aliases, scalar, numeratorUnits, denominatorUnits and kind
    * @throws {QtyError} if kind is unknown
    */
   Qty.getUnits = function(kind) {
+    function normalizeUnitName(unitName) {
+      return unitName.substr(1, unitName.length - 2);
+    }
+
     var units = [];
     var unitKeys = Object.keys(UNITS);
-    if (typeof kind === 'undefined') {
-      for(var i = 0; i < unitKeys.length; i++) {
-        if (['', 'prefix'].indexOf(UNITS[unitKeys[i]][2]) == -1) {
-          units.push(unitKeys[i].substr(1, unitKeys[i].length - 2));
-        }
-      }
-    }
-    else if (Qty.getKinds().indexOf(kind) === -1) {
+
+    if (typeof kind !== 'undefined' && Qty.getKinds().indexOf(kind) === -1) {
       throw new QtyError('Kind not recognized');
     }
-    else {
-      for(var i = 0; i < unitKeys.length; i++) {
-        if (UNITS[unitKeys[i]][2] === kind) {
-          units.push(unitKeys[i].substr(1, unitKeys[i].length - 2));
-        }
+
+    for(var i = 0; i < unitKeys.length; i++) {
+      var unitKey = unitKeys[i];
+      var definition = UNITS[unitKey];
+      var unitKind = definition[2];
+
+      if (['', 'prefix'].indexOf(unitKind) !== -1) {
+        continue;
       }
+
+      if (kind && unitKind !== kind) {
+        continue;
+      }
+
+      var numerator = definition[3] || [];
+      var denominator = definition[4] || [];
+
+      units.push({
+        name: normalizeUnitName(unitKey),
+        aliases: definition[0].slice(),
+        scalar: definition[1],
+        numeratorUnits: numerator.map(normalizeUnitName),
+        denominatorUnits: denominator.map(normalizeUnitName),
+        kind: unitKind
+      });
     }
 
     return units.sort(function(a, b){
-      if(a.toLowerCase() < b.toLowerCase()) return -1;
-      if(a.toLowerCase() > b.toLowerCase()) return 1;
+      var aName = a.name.toLowerCase();
+      var bName = b.name.toLowerCase();
+      if(aName < bName) return -1;
+      if(aName > bName) return 1;
       return 0;
     });
   };

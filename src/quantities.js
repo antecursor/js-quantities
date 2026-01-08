@@ -662,6 +662,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
 
       var aliases = normalizeAliases(def.aliases || def.symbols || []);
+      var canonical = name.substr(1, name.length - 2);
+      if(aliases.indexOf(canonical) === -1) {
+        throw new QtyError("Aliases must include unit name: " + canonical);
+      }
 
       if(!isNumber(def.scalar) || def.scalar <= 0) {
         throw new QtyError("Scalar must be a positive number");
@@ -2019,6 +2023,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           };
           for(var j = 0; j < definition[0].length; j++) {
             UNIT_MAP[definition[0][j]] = unitDef;
+          }
+          var canonical = unitDef.substr(1, unitDef.length - 2);
+          if(!UNIT_MAP[canonical]) {
+            UNIT_MAP[canonical] = unitDef;
           }
         }
         OUTPUT_MAP[unitDef] = definition[0][0];

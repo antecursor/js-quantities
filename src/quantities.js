@@ -543,6 +543,43 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   };
 
   /**
+   * Returns a list of available prefixes
+   *
+   * @returns {Object[]} prefix definitions with name, aliases, scalar
+   */
+  Qty.getPrefixes = function() {
+    function normalizeUnitName(unitName) {
+      return unitName.substr(1, unitName.length - 2);
+    }
+
+    var prefixes = [];
+    var unitKeys = Object.keys(UNITS);
+
+    for(var i = 0; i < unitKeys.length; i++) {
+      var unitKey = unitKeys[i];
+      var definition = UNITS[unitKey];
+
+      if(definition[2] !== "prefix") {
+        continue;
+      }
+
+      prefixes.push({
+        name: normalizeUnitName(unitKey),
+        aliases: definition[0].slice(),
+        scalar: definition[1]
+      });
+    }
+
+    return prefixes.sort(function(a, b){
+      var aName = a.name.toLowerCase();
+      var bName = b.name.toLowerCase();
+      if(aName < bName) return -1;
+      if(aName > bName) return 1;
+      return 0;
+    });
+  };
+
+  /**
    * Returns a list of alternative names for a unit
    *
    * @param {string} unit

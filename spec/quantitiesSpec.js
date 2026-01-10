@@ -1241,10 +1241,21 @@ describe("js-quantities", function() {
 
   describe("Qty.getUnits", function() {
     it("should return an array of units of kind", function() {
-      expect(Qty.getUnits("currency")).toContain("dollar");
+      var units = Qty.getUnits("currency");
+      var dollar = units.filter(function(unit) { return unit.name === "dollar"; })[0];
+      expect(dollar).toBeDefined();
+      expect(dollar.aliases).toContain("USD");
+      expect(dollar.scalar).toEqual(1);
+      expect(dollar.numeratorUnits).toEqual(["dollar"]);
+      expect(dollar.denominatorUnits).toEqual([]);
+      expect(dollar.kind).toEqual("currency");
     });
     it("should return an array of all units without arg", function () {
-      expect(Qty.getUnits()).toContain("sievert");
+      var units = Qty.getUnits();
+      var sievert = units.filter(function(unit) { return unit.name === "sievert"; })[0];
+      expect(sievert).toBeDefined();
+      expect(sievert.numeratorUnits).toEqual(["meter", "meter"]);
+      expect(sievert.denominatorUnits).toEqual(["second", "second"]);
     });
     it("should throw unknown kind", function () {
       expect(function () {Qty.getUnits('bogusKind')}).toThrow("Kind not recognized");
@@ -1256,6 +1267,39 @@ describe("js-quantities", function() {
       expect(Qty.getAliases("m")).toContain("meter");
       expect(Qty.getAliases("meter")).toContain("metre");
       expect(Qty.getAliases("N")).toContain("newton");
+    });
+  });
+
+  describe("registerUnits", function() {
+    it("should register custom units and allow conversions", function() {
+      Qty.registerUnits({
+        name: "<furlong-test>",
+        aliases: ["fl-test"],
+        scalar: 201.168,
+        kind: "length",
+        num: ["<meter>"],
+        den: []
+      });
+
+      var qty = Qty("2 fl-test");
+
+      expect(qty.kind()).toBe("length");
+      expect(qty.isCompatible(Qty("1 m"))).toBe(true);
+      expect(qty.to("m").scalar).toBeCloseTo(402.336, 3);
+      expect(Qty.getAliases("fl-test")).toContain("fl-test");
+    });
+
+    it("should reject conflicting aliases", function() {
+      expect(function() {
+        Qty.registerUnits({
+          name: "<duplicate-meter>",
+          aliases: ["m"],
+          scalar: 1,
+          kind: "length",
+          num: ["<meter>"],
+          den: []
+        });
+      }).toThrow();
     });
   });
 

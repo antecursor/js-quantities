@@ -102,9 +102,19 @@ Qty.getKinds(); // => Array of names of every well-known kind of units
 ### Available units of a particular kind
 
 ```javascript
-Qty.getUnits('currency'); // => [ 'dollar', 'cents' ]
-// Or all alphabetically sorted
-Qty.getUnits(); // => [ 'acre','Ah','ampere','AMU','angstrom']
+Qty.getUnits('currency');
+// => [{
+//      name: 'dollar',
+//      aliases: ['USD', 'dollar'],
+//      scalar: 1,
+//      numeratorUnits: ['dollar'],
+//      denominatorUnits: [],
+//      kind: 'currency'
+//    },
+//    { name: 'cents', aliases: ['cents'], scalar: 0.01, numeratorUnits: ['dollar'], denominatorUnits: [], kind: 'currency' }]
+
+// Or all alphabetically sorted with full unit info
+Qty.getUnits();
 ```
 
 ### Alternative names of a unit
